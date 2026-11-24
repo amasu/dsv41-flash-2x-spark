@@ -53,7 +53,7 @@ else
   echo "FAIL NCCL socket bootstrap ($NCCL_SOCKET_IFNAME): \$(echo "\$bootstrap" | tr '\\n' ' '); check NCCL_SOCKET_IFNAME in .env"
 fi
 fi
-for dev in \$(echo "$RDMA_DEVICES" | tr ',' ' '); do
+for dev in \$(case "$who" in worker) echo "${RDMA_DEVICES_WORKER:-$RDMA_DEVICES}";; *) echo "${RDMA_DEVICES_HEAD:-$RDMA_DEVICES}";; esac | tr ',' ' '); do
   # The engine's RDMA gather sends 4096-byte packets. RoCE gets that MTU only when the netdev MTU is ~4200 or more
   # (9000 is usual). At the default 1500, the gather fails with "transport retry counter exceeded" (issue #15).
   nd=\$(ls /sys/class/infiniband/\$dev/device/net 2>/dev/null | head -1)

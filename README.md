@@ -8,6 +8,14 @@ Also on Hugging Face: [Elevatormusic/DeepSeek-V4.1-Flash-1017-2x-DGX-Spark-Tenso
 
 Measured on 17 and 18 October 2026 on one pair of DGX Spark. Every number on this page comes from a saved run in [`runs/`](runs/2026-10-17/INDEX.md) ([prefill and 1M context](runs/2026-10-18/INDEX.md)).
 
+## Docker Compose front-end (added 2026-11)
+
+A `docker compose` deployment of this same recipe: `docker-compose.yml` declares both rank
+containers (one service per node) and `./cluster.sh up` is the one-command orchestrator on the
+head node (same tested startup order as `start.sh`). `env.tested-2x-spark` is the exact `.env` of
+the 2026-11-24 test run. Details: [docs/COMPOSE.md](docs/COMPOSE.md). The 2026-11-24 redeployment
+and bench run: [runs/2026-11-24/](runs/2026-11-24/INDEX.md) (tool-eval-bench dev7 hardmode: 93/100).
+
 ---
 
 ## At a glance

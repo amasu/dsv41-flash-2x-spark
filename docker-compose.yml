@@ -1,0 +1,154 @@
+# DeepSeek-V4.1-Flash-1017 EXL3 2.9 bpw on 2x NVIDIA DGX Spark — TensorFold TP=2 over RoCE.
+#
+# One file, two services — but you only ever run ONE service per node:
+#   head node   : docker compose up -d tfv41-r0
+#   worker node : docker compose up -d tfv41-r1
+# or just run ./cluster.sh up from the head node, which does both in the tested order
+# (rank 0 first, wait for the rendezvous store port, then rank 1).
+#
+# All knobs come from .env (copy .env.example and edit). env.tested-2x-spark is the exact
+# .env of the 2026-11-24 test run. Details: docs/COMPOSE.md.
+#
+# The container definitions below mirror start.sh exactly (same image, mounts, env vars,
+# ulimits, caps, devices, engine flags), so the two entry points are interchangeable.
+# API-key serving is an overlay: docker-compose.secured.yml (added automatically by
+# cluster.sh when API_KEY_FILE is set in .env).
+
+name: tfv41
+
+# Shared environment for both ranks. TF_RDMA_DEVICES is set per service below, because the
+# two nodes may name their RoCE devices differently (head: mlx5_*, worker: roce*).
+x-tf-env: &tf-env
+  TF_DS_REPLAY: "1"
+  TF_DS_REPLAY_FLOOR: "1"
+  TF_DS_PREFILL_CHUNK: "${PREFILL_CHUNK:-2048}"
+  TF_DS_RANK_CACHE: /cache/tf-ds-rank
+  TF_DS_RANK_CACHE_READERS: "32"
+  TF_DS_WARM_LENGTHS: "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,33,131,514,1024,2113"
+  TF_DS_ENGRAM: /engram
+  TF_DS_SPILL_GIB: "${SPILL_GIB:-64}"
+  TF_DS_SPILL_DIR: /cache/tf-ds-spill
+  TF_DS_ENGRAM_DONTNEED: "1"
+  TF_DS_MEM_FLOOR_GIB: "${MEM_FLOOR_GIB:-1.5}"
+  TF_DROP_UNOFFERED_TOOL_CALLS: "${DROP_UNOFFERED_TOOL_CALLS:-1}"
+  TRITON_CACHE_DIR: /cache/triton
+  CUDA_CACHE_PATH: /cache/nv
+  TF_RDMA_GID_INDEX: "${GID_INDEX:-3}"
+  NCCL_IB_HCA: ${NCCL_IB_HCA}
+  NCCL_IB_GID_INDEX: "${GID_INDEX:-3}"
+  NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME}
+  TORCH_EXTENSIONS_DIR: /cache/torch_extensions
+  HF_HUB_OFFLINE: "1"
+
+# Everything both ranks share: the tested docker run flags of start.sh, expressed as compose.
+x-tf-base: &tf-base
+  image: ${IMAGE}
+  network_mode: host
+  ipc: host
+  shm_size: 32g
+  restart: ${RESTART_POLICY:-no}
+  oom_score_adj: 1000
+  cgroup_parent: ${CGROUP_PARENT:-tensorfold.slice}
+  ulimits:
+    memlock:
+      soft: -1
+      hard: -1
+    stack:
+      soft: 67108864
+      hard: 67108864
+  devices:
+    - /dev/infiniband:/dev/infiniband
+  cap_add:
+    - IPC_LOCK
+    - SYS_PTRACE
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  # Rank 0 — runs on the HEAD node. Master of the TP group; serves the OpenAI-compatible API.
+  tfv41-r0:
+    <<: *tf-base
+    container_name: tfv41-r0
+    environment:
+      <<: *tf-env
+      TF_RDMA_DEVICES: ${RDMA_DEVICES_HEAD:-${RDMA_DEVICES}}
+    volumes:
+      - ${MODEL_VIEW}/model:/model:ro
+      - ${MODEL_VIEW}/engram:/engram:ro
+      - ${CACHE_DIR}:/cache
+    entrypoint: ["tensorfold"]
+    # Tested flags: 1M context, parallel 4, MTP drafts 5, no thinking, no vision.
+    # Opt-ins start.sh also supports (MEM_CAP=1, STRICT_TOOL_OUTPUT=0, VISION=1,
+    # THINKING=1 / REASONING_EFFORT) are a one-line edit here — or just use ./start.sh.
+    command:
+      - serve
+      - /model
+      - --tp
+      - "2"
+      - --rank
+      - "0"
+      - --master
+      - ${HEAD_IP}
+      - --host
+      - ${BIND_HOST:-127.0.0.1}
+      - --port
+      - "${PORT:-8888}"
+      - --name
+      - ${SERVED_NAME:-DeepSeek-V4.1-Flash-1017}
+      - --context
+      - "${CONTEXT:-1048576}"
+      - --parallel
+      - "${PARALLEL:-4}"
+      - --mtp-drafts
+      - "${MTP_DRAFTS:-5}"
+      - --temperature
+      - "${TEMPERATURE:-1.0}"
+      - --top-p
+      - "${TOP_P:-1.0}"
+      - --no-thinking
+      - --no-update-check
+
+  # Rank 1 — runs on the WORKER node. No HTTP; joins rank 0 via $HEAD_IP over RoCE.
+  tfv41-r1:
+    <<: *tf-base
+    container_name: tfv41-r1
+    environment:
+      <<: *tf-env
+      TF_RDMA_DEVICES: ${RDMA_DEVICES_WORKER:-${RDMA_DEVICES}}
+    volumes:
+      - ${MODEL_VIEW}/model:/model:ro
+      - ${MODEL_VIEW}/engram:/engram:ro
+      - ${CACHE_DIR}:/cache
+    entrypoint: ["tensorfold"]
+    command:
+      - serve
+      - /model
+      - --tp
+      - "2"
+      - --rank
+      - "1"
+      - --master
+      - ${HEAD_IP}
+      - --host
+      - ${BIND_HOST:-127.0.0.1}
+      - --port
+      - "${PORT:-8888}"
+      - --name
+      - ${SERVED_NAME:-DeepSeek-V4.1-Flash-1017}
+      - --context
+      - "${CONTEXT:-1048576}"
+      - --parallel
+      - "${PARALLEL:-4}"
+      - --mtp-drafts
+      - "${MTP_DRAFTS:-5}"
+      - --temperature
+      - "${TEMPERATURE:-1.0}"
+      - --top-p
+      - "${TOP_P:-1.0}"
+      - --no-thinking
+      - --no-update-check

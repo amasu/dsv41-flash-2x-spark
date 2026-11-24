@@ -1,0 +1,49 @@
+# Overlay: API-key authentication for rank 0.
+#
+# The base docker-compose.yml serves WITHOUT a key (that is how the 2026-11-24 test run was
+# served). To enable key auth:
+#   1. create a key file with one key per line (chmod 600), on BOTH nodes,
+#   2. set API_KEY_FILE to its path in .env,
+#   3. start with the overlay:
+#        docker compose -f docker-compose.yml -f docker-compose.secured.yml up -d tfv41-r0
+#      (cluster.sh adds the overlay automatically when API_KEY_FILE is set, and refuses
+#       to start if the file is missing on either node.)
+#
+# Compose replaces (not appends) lists on merge, so the base service's volumes/command are
+# restated here in full. Rank 1 needs no key: it never serves HTTP.
+services:
+  tfv41-r0:
+    volumes:
+      - ${MODEL_VIEW}/model:/model:ro
+      - ${MODEL_VIEW}/engram:/engram:ro
+      - ${CACHE_DIR}:/cache
+      - ${API_KEY_FILE}:/run/keys:ro
+    command:
+      - serve
+      - /model
+      - --tp
+      - "2"
+      - --rank
+      - "0"
+      - --master
+      - ${HEAD_IP}
+      - --host
+      - ${BIND_HOST:-127.0.0.1}
+      - --port
+      - "${PORT:-8888}"
+      - --name
+      - ${SERVED_NAME:-DeepSeek-V4.1-Flash-1017}
+      - --api-key-file
+      - /run/keys
+      - --context
+      - "${CONTEXT:-1048576}"
+      - --parallel
+      - "${PARALLEL:-4}"
+      - --mtp-drafts
+      - "${MTP_DRAFTS:-5}"
+      - --temperature
+      - "${TEMPERATURE:-1.0}"
+      - --top-p
+      - "${TOP_P:-1.0}"
+      - --no-thinking
+      - --no-update-check

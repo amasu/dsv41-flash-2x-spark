@@ -47,6 +47,7 @@ wssh "mkdir -p '$CACHE_DIR'"
 run_args() {  # $1 = rank. Every TF_DS_* setting below is explained in docs/WHAT-I-CHANGED.md
   local r=$1 key=""
   [ -n "${API_KEY_FILE:-}" ] && [ "$r" = 0 ] && key="-v $API_KEY_FILE:/run/keys:ro"   # rank 0 serves HTTP
+  if [ "$r" = "0" ]; then tf_rdma_devs="${RDMA_DEVICES_HEAD:-$RDMA_DEVICES}"; else tf_rdma_devs="${RDMA_DEVICES_WORKER:-$RDMA_DEVICES}"; fi
   cat <<EOF
 -d --name tfv41-r$r --restart ${RESTART_POLICY:-no} $( [ -n "${CGROUP_PARENT-tensorfold.slice}" ] && echo "--cgroup-parent ${CGROUP_PARENT-tensorfold.slice}" ) --gpus all --network host --ipc host --shm-size 32g --oom-score-adj 1000
 --ulimit memlock=-1 --ulimit stack=67108864 --device /dev/infiniband --cap-add IPC_LOCK --cap-add SYS_PTRACE
@@ -59,7 +60,7 @@ run_args() {  # $1 = rank. Every TF_DS_* setting below is explained in docs/WHAT
 -e TF_DROP_UNOFFERED_TOOL_CALLS=${DROP_UNOFFERED_TOOL_CALLS:-1}
 $( [ "${MEM_CAP:-0}" = 1 ] && echo '-e TF_DS_MEM_CAP=1' )
 -e TRITON_CACHE_DIR=/cache/triton -e CUDA_CACHE_PATH=/cache/nv
--e TF_RDMA_DEVICES=$RDMA_DEVICES -e TF_RDMA_GID_INDEX=$GID_INDEX
+-e TF_RDMA_DEVICES=$tf_rdma_devs -e TF_RDMA_GID_INDEX=$GID_INDEX
 -e NCCL_IB_HCA=$NCCL_IB_HCA -e NCCL_IB_GID_INDEX=$GID_INDEX -e NCCL_SOCKET_IFNAME=$NCCL_SOCKET_IFNAME
 $( [ "${STRICT_TOOL_OUTPUT:-1}" = 0 ] && echo '-e TF_DS_STRICT_TOOL_OUTPUT=0' )
 -e TORCH_EXTENSIONS_DIR=/cache/torch_extensions -e HF_HUB_OFFLINE=1
