@@ -45,9 +45,9 @@ x-tf-base: &tf-base
   image: ${IMAGE}
   network_mode: host
   ipc: host
-  shm_size: 32g
+  shm_size: ${SHM_SIZE:-32g}
   restart: ${RESTART_POLICY:-no}
-  oom_score_adj: 1000
+  oom_score_adj: ${OOM_SCORE_ADJ:-1000}
   cgroup_parent: ${CGROUP_PARENT:-tensorfold.slice}
   ulimits:
     memlock:

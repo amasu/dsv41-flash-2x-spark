@@ -87,6 +87,8 @@ Defaults match the tested recipe (`env.tested-2x-spark` is the exact `.env` of t
 run): 1M context, parallel 4, MTP drafts 5, prefill chunk 2048, spill 64 GiB, mem floor
 1.5 GiB, no-swap `tensorfold.slice`, 32 g `/dev/shm`, `memlock` unlimited, stack 64 MiB,
 `/dev/infiniband` passthrough, `IPC_LOCK` + `SYS_PTRACE`, RoCE GID index 3, `HF_HUB_OFFLINE=1`.
+Two more runtime knobs are tunable via `.env`: `SHM_SIZE` (default `32g`, the `/dev/shm` size)
+and `OOM_SCORE_ADJ` (default `1000`, docker `--oom-score-adj`).
 
 Opt-in switches `start.sh` also exposes (`MEM_CAP=1`, `STRICT_TOOL_OUTPUT=0`, `VISION=1`,
 `THINKING=1` / `REASONING_EFFORT`) are a one-line edit to the `command:` list (or env for
